@@ -1,4 +1,3 @@
-const fss = require('fs');
 const fs = require('fs');
 const scoreFile = 'scores.json';
 
