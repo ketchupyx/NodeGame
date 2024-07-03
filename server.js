@@ -63,14 +63,18 @@ io.on('connection', (socket) => {
     socket.on('move', (movement) => {
         const player = players[socket.id];
         if (player && !player.dead) {
-            player.x += movement.x;
-            player.y += movement.y;
+            const newX = player.x + movement.x;
+            const newY = player.y + movement.y;
 
-            // Vérifier et résoudre les collisions avec les obstacles
-            if (isCollidingWithObstacles(player.x, player.y, 20)) {
-                const [newX, newY] = adjustPosition(player.x, player.y, 20);
+            // Vérifier les collisions avant de mettre à jour la position du joueur
+            if (!isCollidingWithObstacles(newX, newY, 20)) {
                 player.x = newX;
                 player.y = newY;
+            } else {
+                // Essayer de déplacer le joueur de petites étapes jusqu'à trouver une position valide
+                const [adjustedX, adjustedY] = findValidPosition(player.x, player.y, movement.x, movement.y, 20);
+                player.x = adjustedX;
+                player.y = adjustedY;
             }
 
             player.x = Math.max(0, Math.min(800, player.x));
@@ -162,18 +166,25 @@ function updateProjectiles() {
     io.emit('state', { players, projectiles });
 }
 
-function adjustPosition(x, y, radius) {
-    const step = 2; // Petite distance de déplacement pour éviter les téléportations visibles
-    const directions = [
-        [step, 0], [-step, 0], [0, step], [0, -step],
-        [step, step], [-step, step], [step, -step], [-step, -step]
-    ];
-    for (const [dx, dy] of directions) {
-        if (!isCollidingWithObstacles(x + dx, y + dy, radius)) {
-            return [x + dx, y + dy];
+function findValidPosition(x, y, dx, dy, radius) {
+    const step = 1; // Petite distance de déplacement pour éviter les téléportations visibles
+    for (let i = 0; i < Math.abs(dx); i++) {
+        const newX = x + Math.sign(dx) * step;
+        if (!isCollidingWithObstacles(newX, y, radius)) {
+            x = newX;
+        } else {
+            break;
         }
     }
-    return [x, y]; // Si aucune position valide n'est trouvée, retourner la position initiale
+    for (let i = 0; i < Math.abs(dy); i++) {
+        const newY = y + Math.sign(dy) * step;
+        if (!isCollidingWithObstacles(x, newY, radius)) {
+            y = newY;
+        } else {
+            break;
+        }
+    }
+    return [x, y];
 }
 
 function isCollidingWithObstacles(x, y, radius) {
