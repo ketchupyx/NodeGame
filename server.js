@@ -65,6 +65,14 @@ io.on('connection', (socket) => {
         if (player && !player.dead) {
             player.x += movement.x;
             player.y += movement.y;
+
+            // Vérifier et résoudre les collisions avec les obstacles
+            if (isCollidingWithObstacles(player.x, player.y, 20)) {
+                const [newX, newY] = teleportOutOfCollision(player.x, player.y, 20);
+                player.x = newX;
+                player.y = newY;
+            }
+
             player.x = Math.max(0, Math.min(800, player.x));
             player.y = Math.max(0, Math.min(800, player.y));
             io.emit('state', { players, projectiles });
@@ -154,6 +162,17 @@ function updateProjectiles() {
     io.emit('state', { players, projectiles });
 }
 
+function teleportOutOfCollision(x, y, radius) {
+    for (let i = radius; i <= 800; i += radius) {
+        for (let j = -radius; j <= radius; j += radius) {
+            if (!isCollidingWithObstacles(x + i, y + j, radius)) return [x + i, y + j];
+            if (!isCollidingWithObstacles(x - i, y + j, radius)) return [x - i, y + j];
+            if (!isCollidingWithObstacles(x + j, y + i, radius)) return [x + j, y + i];
+            if (!isCollidingWithObstacles(x + j, y - i, radius)) return [x + j, y - i];
+        }
+    }
+    return [x, y]; // Si aucune position valide n'est trouvée, retourner la position initiale
+}
 
 function isCollidingWithObstacles(x, y, radius) {
     if (!collisionData) return false;
