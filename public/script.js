@@ -20,10 +20,6 @@ const projectileSpeed = 10; // Vitesse des projectiles
 const cooldownTime = 500; // Temps de recharge de 0.5 seconde
 const maxLives = 5; // Nombre maximum de vies
 
-// Interpolation
-let lastServerUpdateTime = Date.now();
-const interpolationDelay = 100; // Délai d'interpolation en ms
-
 // Charger l'image de fond
 const backgroundImage = new Image();
 backgroundImage.src = 'img/map.png';
@@ -34,6 +30,7 @@ collisionImage.src = 'img/collision.png';
 
 let collisionData = null;
 
+// Lorsque l'image de collision est chargée, créer un canvas temporaire pour récupérer les données
 collisionImage.onload = () => {
     const collisionCanvas = document.createElement('canvas');
     collisionCanvas.width = 800;
@@ -55,35 +52,17 @@ socket.on('connect', () => {
 socket.on('state', (state) => {
     players = state.players;
     projectiles = state.projectiles;
-    lastServerUpdateTime = Date.now();
 });
-
-function interpolatePositions() {
-    const now = Date.now();
-    const deltaTime = now - lastServerUpdateTime;
-
-    for (let id in players) {
-        if (id === playerId) continue; // Skip interpolation for the local player
-
-        const player = players[id];
-        const newX = player.x + (player.dx * deltaTime) / interpolationDelay;
-        const newY = player.y + (player.dy * deltaTime) / interpolationDelay;
-
-        player.x = newX;
-        player.y = newY;
-    }
-}
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    interpolatePositions();
 
     if (playerId && players[playerId]) {
         const player = players[playerId];
         const cameraX = Math.max(0, Math.min(800 - canvas.width, player.x - canvas.width / 2));
         const cameraY = Math.max(0, Math.min(800 - canvas.height, player.y - canvas.height / 2));
 
+        // Dessiner l'image de fond
         ctx.drawImage(backgroundImage, -cameraX, -cameraY, 800, 800);
 
         for (let id in players) {
@@ -93,21 +72,34 @@ function draw() {
                 ctx.beginPath();
                 ctx.arc(otherPlayer.x - cameraX, otherPlayer.y - cameraY, 20, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.fillStyle = 'black';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
+                // Dessiner le score
+                ctx.fillStyle = 'black';  // Couleur du texte
+                ctx.font = '12px Arial'; // Taille et police du texte
+                ctx.textAlign = 'center'; // Aligner le texte au centre
                 ctx.fillText(otherPlayer.score, otherPlayer.x - cameraX, otherPlayer.y - cameraY + 4);
+
+                // Contour blanc pour le score pour une meilleure visibilité
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 1;
                 ctx.strokeText(otherPlayer.score, otherPlayer.x - cameraX, otherPlayer.y - cameraY + 4);
+
+                // Dessiner le nom du joueur
+                ctx.fillStyle = 'black';
+                ctx.font = '12px Arial';
                 ctx.fillText(otherPlayer.name, otherPlayer.x - cameraX - 10, otherPlayer.y - cameraY - 25);
+
+                // Dessiner les barres de vie et de recharge sous les joueurs
                 const barWidth = 40;
                 const barHeight = 5;
                 const barOffsetY = 30;
+
+                // Barre de vie
                 ctx.fillStyle = 'red';
                 ctx.fillRect(otherPlayer.x - cameraX - barWidth / 2, otherPlayer.y - cameraY + barOffsetY, barWidth, barHeight);
                 ctx.fillStyle = 'green';
                 ctx.fillRect(otherPlayer.x - cameraX - barWidth / 2, otherPlayer.y - cameraY + barOffsetY, barWidth * (otherPlayer.lives / maxLives), barHeight);
+
+                // Barre de recharge
                 ctx.fillStyle = 'green';
                 ctx.fillRect(otherPlayer.x - cameraX - barWidth / 2, otherPlayer.y - cameraY + barOffsetY + barHeight + 2, barWidth, barHeight);
                 if (otherPlayer.shootCooldown > 0) {
@@ -117,6 +109,7 @@ function draw() {
             }
         }
 
+        // Dessiner les projectiles
         for (let projectile of projectiles) {
             ctx.fillStyle = 'black';
             ctx.beginPath();
@@ -167,6 +160,7 @@ function fireProjectile(mouseX, mouseY) {
         projectiles.push(projectile);
         socket.emit('fire', projectile);
         shootCooldown = cooldownTime;
+        console.log('Fire! Shoot cooldown set to:', shootCooldown); // Log pour vérifier la valeur de shootCooldown
     }
 }
 
@@ -195,6 +189,7 @@ function updateMovement() {
     movement.x = playerSpeed.x;
     movement.y = playerSpeed.y;
 
+    // Vérifier les collisions avec les obstacles
     if (playerId && players[playerId]) {
         let newX = players[playerId].x + movement.x;
         let newY = players[playerId].y + movement.y;
@@ -203,11 +198,14 @@ function updateMovement() {
         }
     }
 
+    // Mettre à jour les projectiles
     updateProjectiles();
 }
 
 function updateProjectiles() {
-    if (shootCooldown > 0) shootCooldown -= 1000 / 60;
+    if (shootCooldown > 0) {
+        shootCooldown -= 1000 / 60;
+    }
     for (let i = projectiles.length - 1; i >= 0; i--) {
         let projectile = projectiles[i];
         projectile.x += projectile.direction.x * projectileSpeed;
@@ -237,6 +235,6 @@ function isCollidingWithObstacles(x, y, radius) {
     return false;
 }
 
-setInterval(updateMovement, 1000 / 60);
+setInterval(updateMovement, 1000 / 60); // Mettre à jour le mouvement 60 fois par seconde
 
 draw();

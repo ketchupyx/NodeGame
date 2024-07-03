@@ -16,7 +16,7 @@ const maxLives = 5;
 const projectileSpeed = 10; // Vitesse des projectiles
 const playerSockets = {};
 const scoreFile = 'scores.json';
-const port = process.env.PORT || 3000;
+const port = 3000;  // Définir le port ici
 
 let collisionData = null;
 let scores = loadScores(); // Charge les scores dès le démarrage
@@ -63,33 +63,39 @@ io.on('connection', (socket) => {
     socket.on('move', (movement) => {
         const player = players[socket.id];
         if (player && !player.dead) {
-            const newX = player.x + movement.x;
-            const newY = player.y + movement.y;
+            let newX = player.x + movement.x;
+            let newY = player.y + movement.y;
 
-            if (!isCollidingWithObstacles(newX, newY, 20)) {
+            // Vérifiez les collisions
+            if (isCollidingWithObstacles(newX, newY, 20)) {
+                const validPosition = findValidPosition(player.x, player.y, 20);
+                player.x = validPosition.x;
+                player.y = validPosition.y;
+            } else {
                 player.x = newX;
                 player.y = newY;
-            } else {
-                const { validX, validY } = findValidPosition(player.x, player.y);
-                player.x = validX;
-                player.y = validY;
             }
+
+            // Vérifier les collisions avec les bords de l'arène
+            player.x = Math.max(0, Math.min(800, player.x));
+            player.y = Math.max(0, Math.min(800, player.y));
+
             io.emit('state', { players, projectiles });
         }
     });
 
-socket.on('fire', (projectile) => {
-    const player = players[socket.id];
-    if (player && !player.dead) {
-        const now = Date.now();
-        if (now - player.lastShotTime >= cooldownTime) {
-            projectiles.push({ ...projectile, ownerId: socket.id });
-            player.lastShotTime = now;
-            player.shootCooldown = cooldownTime; // Assurez-vous que shootCooldown est initialisé
-            io.emit('state', { players, projectiles });
+    socket.on('fire', (projectile) => {
+        const player = players[socket.id];
+        if (player && !player.dead) {
+            const now = Date.now();
+            if (now - player.lastShotTime >= cooldownTime) {
+                projectiles.push({ ...projectile, ownerId: socket.id });
+                player.lastShotTime = now;
+                player.shootCooldown = cooldownTime; // Assurez-vous que shootCooldown est initialisé
+                io.emit('state', { players, projectiles });
+            }
         }
-    }
-});
+    });
 
     socket.on('disconnect', () => {
         if (players[socket.id]) {
@@ -106,10 +112,7 @@ socket.on('fire', (projectile) => {
     });
 });
 
-setInterval(() => {
-    updateProjectiles();
-    io.emit('state', { players, projectiles });
-}, 1000 / 60);
+setInterval(updateProjectiles, 1000 / 60);
 
 function updateProjectiles() {
     for (let id in players) {
@@ -182,21 +185,20 @@ function isCollidingWithObstacles(x, y, radius) {
     return false;
 }
 
-// Fonction pour trouver la position valide la plus proche
-function findValidPosition(x, y) {
+function findValidPosition(x, y, radius) {
     const maxDistance = 50; // Distance maximale pour chercher une position valide
     for (let d = 1; d <= maxDistance; d++) {
         for (let dx = -d; dx <= d; dx++) {
             for (let dy = -d; dy <= d; dy++) {
                 const newX = x + dx;
                 const newY = y + dy;
-                if (!isCollidingWithObstacles(newX, newY, 20)) {
-                    return { validX: newX, validY: newY };
+                if (!isCollidingWithObstacles(newX, newY, radius)) {
+                    return { x: newX, y: newY };
                 }
             }
         }
     }
-    return { validX: x, validY: y }; // Si aucune position valide n'est trouvée, retourner la position originale
+    return { x, y }; // Si aucune position valide n'est trouvée, retourner la position originale
 }
 
 function getRandomColor() {
@@ -241,8 +243,6 @@ app.post('/admin/kick', (req, res) => {
     }
 });
 
-
 server.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
- 
