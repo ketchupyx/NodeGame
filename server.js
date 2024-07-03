@@ -3,6 +3,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const { createCanvas, loadImage } = require('canvas');
 const fs = require('fs');
+const { isCollidingWithObstacles, getRandomColor, loadScores, saveScores, findValidPosition } = require('./utilities');
 
 const app = express();
 const server = http.createServer(app);
@@ -43,7 +44,7 @@ io.on('connection', (socket) => {
         do {
             spawnX = Math.random() * 800;
             spawnY = Math.random() * 800;
-        } while (isCollidingWithObstacles(spawnX, spawnY, 20));
+        } while (isCollidingWithObstacles(spawnX, spawnY, 20, collisionData));
 
         players[socket.id] = {
             x: spawnX,
@@ -67,12 +68,12 @@ io.on('connection', (socket) => {
             const newY = player.y + movement.y;
 
             // Vérifier les collisions avant de mettre à jour la position du joueur
-            if (!isCollidingWithObstacles(newX, newY, 20)) {
+            if (!isCollidingWithObstacles(newX, newY, 20, collisionData)) {
                 player.x = newX;
                 player.y = newY;
             } else {
                 // Essayer de déplacer le joueur de petites étapes jusqu'à trouver une position valide
-                const [adjustedX, adjustedY] = findValidPosition(player.x, player.y, movement.x, movement.y, 20);
+                const [adjustedX, adjustedY] = findValidPosition(player.x, player.y, movement.x, movement.y, 20, collisionData);
                 player.x = adjustedX;
                 player.y = adjustedY;
             }
@@ -126,7 +127,7 @@ function updateProjectiles() {
         projectile.x += projectile.direction.x * projectileSpeed;
         projectile.y += projectile.direction.y * projectileSpeed;
 
-        if (isCollidingWithObstacles(projectile.x, projectile.y, 5)) {
+        if (isCollidingWithObstacles(projectile.x, projectile.y, 5, collisionData)) {
             projectiles.splice(i, 1);
         } else {
             for (let id in players) {
@@ -153,7 +154,7 @@ function updateProjectiles() {
             do {
                 spawnX = Math.random() * 800;
                 spawnY = Math.random() * 800;
-            } while (isCollidingWithObstacles(spawnX, spawnY, 20));
+            } while (isCollidingWithObstacles(spawnX, spawnY, 20, collisionData));
 
             player.dead = false;
             player.lives = maxLives;
@@ -164,65 +165,6 @@ function updateProjectiles() {
     }
 
     io.emit('state', { players, projectiles });
-}
-
-function findValidPosition(x, y, dx, dy, radius) {
-    const step = 1; // Petite distance de déplacement pour éviter les téléportations visibles
-    for (let i = 0; i < Math.abs(dx); i++) {
-        const newX = x + Math.sign(dx) * step;
-        if (!isCollidingWithObstacles(newX, y, radius)) {
-            x = newX;
-        } else {
-            break;
-        }
-    }
-    for (let i = 0; i < Math.abs(dy); i++) {
-        const newY = y + Math.sign(dy) * step;
-        if (!isCollidingWithObstacles(x, newY, radius)) {
-            y = newY;
-        } else {
-            break;
-        }
-    }
-    return [x, y];
-}
-
-function isCollidingWithObstacles(x, y, radius) {
-    if (!collisionData) return false;
-    for (let i = -radius; i <= radius; i++) {
-        for (let j = -radius; j <= radius; j++) {
-            if (i * i + j * j <= radius * radius) {
-                const pixelX = Math.floor(x + i);
-                const pixelY = Math.floor(y + j);
-                const index = (pixelY * 800 + pixelX) * 4;
-                if (collisionData[index] === 255 && collisionData[index + 1] === 0 && collisionData[index + 2] === 0) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
-function getRandomColor() {
-    const letters = '0123456789ABCDEF';
-    let color = '#';
-    for (let i = 0; i < 6; i++) {
-        color += letters[Math.floor(Math.random() * 16)];
-    }
-    return color;
-}
-
-function loadScores() {
-    if (fs.existsSync(scoreFile)) {
-        return JSON.parse(fs.readFileSync(scoreFile));
-    } else {
-        return {};
-    }
-}
-
-function saveScores(scores) {
-    fs.writeFileSync(scoreFile, JSON.stringify(scores));
 }
 
 // Route pour vérifier la santé de l'application
