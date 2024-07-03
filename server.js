@@ -16,7 +16,7 @@ const maxLives = 5;
 const projectileSpeed = 10; // Vitesse des projectiles
 const playerSockets = {};
 const scoreFile = 'scores.json';
-const port = 3000;  // Définir le port ici
+const port = process.env.PORT || 3000;  // Définir le port ici, utiliser le port spécifié par l'environnement
 
 let collisionData = null;
 let scores = loadScores(); // Charge les scores dès le démarrage
@@ -36,42 +36,40 @@ app.use(express.json());
 app.use(express.static('public')); // Servir les fichiers statiques depuis le répertoire public
 
 io.on('connection', (socket) => {
-socket.on('join', (data) => {
-    playerSockets[data.name] = socket;
-    let currentScore = scores[data.name] || 0;
-    let spawnX, spawnY;
-    do {
-        spawnX = Math.random() * 800;
-        spawnY = Math.random() * 800;
-    } while (isCollidingWithObstacles(spawnX, spawnY, 20));
+    socket.on('join', (data) => {
+        playerSockets[data.name] = socket;
+        let currentScore = scores[data.name] || 0;
+        let spawnX, spawnY;
+        do {
+            spawnX = Math.random() * 800;
+            spawnY = Math.random() * 800;
+        } while (isCollidingWithObstacles(spawnX, spawnY, 20));
 
-    players[socket.id] = {
-        x: spawnX,
-        y: spawnY,
-        color: getRandomColor(),
-        name: data.name,
-        lives: maxLives,
-        dead: false,
-        respawnTime: null,
-        lastShotTime: 0,
-        score: currentScore
-    };
-    console.log(`Player connected: ${data.name}`);
-    console.log('Current players:', players); // Ajoutez cette ligne pour déboguer
-    io.emit('state', { players, projectiles });
-});
-
-socket.on('move', (movement) => {
-    const player = players[socket.id];
-    if (player && !player.dead) {
-        player.x += movement.x;
-        player.y += movement.y;
-        player.x = Math.max(0, Math.min(800, player.x));
-        player.y = Math.max(0, Math.min(800, player.y));
-        console.log('Player moved:', player); // Ajoutez cette ligne pour déboguer
+        players[socket.id] = {
+            x: spawnX,
+            y: spawnY,
+            color: getRandomColor(),
+            name: data.name,
+            lives: maxLives,
+            dead: false,
+            respawnTime: null,
+            lastShotTime: 0,
+            score: currentScore
+        };
+        console.log(`Player connected: ${data.name}`);
         io.emit('state', { players, projectiles });
-    }
-});
+    });
+
+    socket.on('move', (movement) => {
+        const player = players[socket.id];
+        if (player && !player.dead) {
+            player.x += movement.x;
+            player.y += movement.y;
+            player.x = Math.max(0, Math.min(800, player.x));
+            player.y = Math.max(0, Math.min(800, player.y));
+            io.emit('state', { players, projectiles });
+        }
+    });
 
     socket.on('fire', (projectile) => {
         const player = players[socket.id];
@@ -174,22 +172,6 @@ function isCollidingWithObstacles(x, y, radius) {
     return false;
 }
 
-function findValidPosition(x, y, radius) {
-    const maxDistance = 50; // Distance maximale pour chercher une position valide
-    for (let d = 1; d <= maxDistance; d++) {
-        for (let dx = -d; dx <= d; dx++) {
-            for (let dy = -d; dy <= d; dy++) {
-                const newX = x + dx;
-                const newY = y + dy;
-                if (!isCollidingWithObstacles(newX, newY, radius)) {
-                    return { x: newX, y: newY };
-                }
-            }
-        }
-    }
-    return { x, y }; // Si aucune position valide n'est trouvée, retourner la position originale
-}
-
 function getRandomColor() {
     const letters = '0123456789ABCDEF';
     let color = '#';
@@ -211,6 +193,11 @@ function saveScores(scores) {
     fs.writeFileSync(scoreFile, JSON.stringify(scores));
 }
 
+// Route pour vérifier la santé de l'application
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
 app.post('/admin/shutdown', (req, res) => {
     console.log("Shutting down the server...");
     res.send("Shutting down the server...");
@@ -231,7 +218,7 @@ app.post('/admin/kick', (req, res) => {
         res.status(404).send(`Player ${playerName} not found.`);
     }
 });
- 
+
 server.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
