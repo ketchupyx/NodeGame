@@ -13,7 +13,7 @@ let shootCooldown = 0;
 
 const keysPressed = {};
 let projectiles = [];
-
+let particles = [];
 const acceleration = 3;
 const maxSpeed = 50;
 const projectileSpeed = 10; // Vitesse des projectiles
@@ -40,7 +40,32 @@ collisionImage.onload = () => {
     collisionData = collisionCtx.getImageData(0, 0, 800, 800).data;
     console.log('Collision data loaded');
 };
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = 3;
+        this.velocity = {
+            x: Math.random() * 2 - 1,
+            y: Math.random() * 2 - 1
+        };
+        this.lifespan = 60; // Number of frames the particle will exist
+    }
 
+    update() {
+        this.x += this.velocity.x;
+        this.y += this.velocity.y;
+        this.lifespan--;
+    }
+
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
 socket.on('connect', () => {
     console.log('connected to server');
     playerId = socket.id;
@@ -53,10 +78,42 @@ socket.on('state', (state) => {
     players = state.players;
     projectiles = state.projectiles;
 });
+socket.on('collision', (collisionData) => {
+    createParticles(collisionData.x, collisionData.y);
+  });
+  function createParticles(x, y) {
+  for (let i = 0; i < 10; i++) {
+    particles.push(new Particle(x, y, 'red'));
+  }
+}
 
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].update();
+    if (particles[i].lifespan <= 0) {
+      particles.splice(i, 1);
+    }
+  }
+}
+
+function drawParticles() {
+    
+    const player = players[playerId];
+    const cameraX = player ? Math.max(0, Math.min(800 - canvas.width, player.x - canvas.width / 2)) : 0;
+    const cameraY = player ? Math.max(0, Math.min(800 - canvas.height, player.y - canvas.height / 2)) : 0;
+
+    particles.forEach(particle => {
+        ctx.fillStyle = particle.color;
+        ctx.beginPath();
+        ctx.arc(particle.x - cameraX, particle.y - cameraY, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
 function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    updateParticles();
+    drawParticles();
     if (playerId && players[playerId]) {
         const player = players[playerId];
         const cameraX = Math.max(0, Math.min(800 - canvas.width, player.x - canvas.width / 2));
@@ -124,7 +181,8 @@ function draw() {
             ctx.fillText(`Dead, respawning in ${respawnTimeLeft}...`, canvas.width / 2 - 150, canvas.height / 2);
         }
     }
-
+    updateParticles();
+    drawParticles();
     requestAnimationFrame(draw);
 }
 
@@ -203,20 +261,42 @@ function updateMovement() {
 }
 
 function updateProjectiles() {
+    updateParticles();
     if (shootCooldown > 0) {
-        shootCooldown -= 1000 / 60;
+      shootCooldown -= 1000 / 60;
     }
     for (let i = projectiles.length - 1; i >= 0; i--) {
-        let projectile = projectiles[i];
-        projectile.x += projectile.direction.x * projectileSpeed;
-        projectile.y += projectile.direction.y * projectileSpeed;
-
-        if (projectile.x < 0 || projectile.x > 800 || projectile.y < 0 || projectile.y > 800 ||
-            isCollidingWithObstacles(projectile.x, projectile.y, 5)) {
-            projectiles.splice(i, 1);
+      let projectile = projectiles[i];
+      projectile.x += projectile.direction.x * projectileSpeed;
+      projectile.y += projectile.direction.y * projectileSpeed;
+  
+      let collision = false;
+  
+      // Check collision with obstacles
+      if (projectile.x < 0 || projectile.x > 800 || projectile.y < 0 || projectile.y > 800 ||
+          isCollidingWithObstacles(projectile.x, projectile.y, 5)) {
+        collision = true;
+      }
+  
+      // Check collision with players
+      for (let id in players) {
+        if (id !== projectile.ownerId) {
+          let player = players[id];
+          if (!player.dead && Math.hypot(projectile.x - player.x, projectile.y - player.y) < 20) {
+            collision = true;
+            // Handle player hit logic here (e.g., reduce health)
+            socket.emit('playerHit', { playerId: id, projectileId: i });
+            break;
+          }
         }
+      }
+  
+      if (collision) {
+        createParticles(projectile.x, projectile.y);
+        projectiles.splice(i, 1);
+      }
     }
-}
+  }
 
 function isCollidingWithObstacles(x, y, radius) {
     if (!collisionData) return false;

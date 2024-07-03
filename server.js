@@ -96,6 +96,9 @@ io.on('connection', (socket) => {
             }
         }
     });
+    socket.on('bulletHit', (data) => {
+      io.emit('collision', { x: data.x, y: data.y });
+    });
 
     socket.on('disconnect', () => {
         if (players[socket.id]) {
