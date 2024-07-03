@@ -52,6 +52,7 @@ socket.on('connect', () => {
 socket.on('state', (state) => {
     players = state.players;
     projectiles = state.projectiles;
+    console.log('Received state:', state); // Ajoutez cette ligne pour déboguer
 });
 
 function draw() {

@@ -36,53 +36,42 @@ app.use(express.json());
 app.use(express.static('public')); // Servir les fichiers statiques depuis le répertoire public
 
 io.on('connection', (socket) => {
-    socket.on('join', (data) => {
-        playerSockets[data.name] = socket;
-        let currentScore = scores[data.name] || 0;
-        let spawnX, spawnY;
-        do {
-            spawnX = Math.random() * 800;
-            spawnY = Math.random() * 800;
-        } while (isCollidingWithObstacles(spawnX, spawnY, 20));
+socket.on('join', (data) => {
+    playerSockets[data.name] = socket;
+    let currentScore = scores[data.name] || 0;
+    let spawnX, spawnY;
+    do {
+        spawnX = Math.random() * 800;
+        spawnY = Math.random() * 800;
+    } while (isCollidingWithObstacles(spawnX, spawnY, 20));
 
-        players[socket.id] = {
-            x: spawnX,
-            y: spawnY,
-            color: getRandomColor(),
-            name: data.name,
-            lives: maxLives,
-            dead: false,
-            respawnTime: null,
-            lastShotTime: 0,
-            score: currentScore
-        };
-        console.log(`Player connected: ${data.name}`);
+    players[socket.id] = {
+        x: spawnX,
+        y: spawnY,
+        color: getRandomColor(),
+        name: data.name,
+        lives: maxLives,
+        dead: false,
+        respawnTime: null,
+        lastShotTime: 0,
+        score: currentScore
+    };
+    console.log(`Player connected: ${data.name}`);
+    console.log('Current players:', players); // Ajoutez cette ligne pour déboguer
+    io.emit('state', { players, projectiles });
+});
+
+socket.on('move', (movement) => {
+    const player = players[socket.id];
+    if (player && !player.dead) {
+        player.x += movement.x;
+        player.y += movement.y;
+        player.x = Math.max(0, Math.min(800, player.x));
+        player.y = Math.max(0, Math.min(800, player.y));
+        console.log('Player moved:', player); // Ajoutez cette ligne pour déboguer
         io.emit('state', { players, projectiles });
-    });
-
-    socket.on('move', (movement) => {
-        const player = players[socket.id];
-        if (player && !player.dead) {
-            let newX = player.x + movement.x;
-            let newY = player.y + movement.y;
-
-            // Vérifiez les collisions
-            if (isCollidingWithObstacles(newX, newY, 20)) {
-                const validPosition = findValidPosition(player.x, player.y, 20);
-                player.x = validPosition.x;
-                player.y = validPosition.y;
-            } else {
-                player.x = newX;
-                player.y = newY;
-            }
-
-            // Vérifier les collisions avec les bords de l'arène
-            player.x = Math.max(0, Math.min(800, player.x));
-            player.y = Math.max(0, Math.min(800, player.y));
-
-            io.emit('state', { players, projectiles });
-        }
-    });
+    }
+});
 
     socket.on('fire', (projectile) => {
         const player = players[socket.id];
