@@ -16,7 +16,7 @@ const maxLives = 5;
 const projectileSpeed = 10; // Vitesse des projectiles
 const playerSockets = {};
 const scoreFile = 'scores.json';
-const port = 3000;  // Définir le port ici
+const port = process.env.PORT || 3000;
 
 let collisionData = null;
 let scores = loadScores(); // Charge les scores dès le démarrage
@@ -214,7 +214,7 @@ app.post('/admin/kick', (req, res) => {
     }
 });
 
-const port = process.env.PORT || 3000;
+
 server.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
