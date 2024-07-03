@@ -1,13 +1,12 @@
 {
-  "name": "ai",
+  "name": "nodegame",
   "version": "1.0.0",
-  "description": "",
-  "main": "script.js",
+  "description": "A multiplayer game built with Node.js, Express, and Socket.IO",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
-  "keywords": [],
+  "keywords": ["game", "multiplayer", "nodejs", "socket.io"],
   "author": "",
   "license": "ISC",
   "dependencies": {
