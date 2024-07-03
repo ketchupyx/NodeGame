@@ -55,10 +55,11 @@ io.on('connection', (socket) => {
             dead: false,
             respawnTime: null,
             lastShotTime: 0,
-            score: currentScore
+            score: currentScore,
+            angle: 0
         };
         console.log(`Player connected: ${data.name}`);
-        io.emit('state', { players, projectiles });
+        io.emit('state', getGameState());
     });
 
     socket.on('move', (movement) => {
@@ -99,7 +100,13 @@ io.on('connection', (socket) => {
     socket.on('bulletHit', (data) => {
       io.emit('collision', { x: data.x, y: data.y });
     });
-
+    socket.on('playerAngle', (angle) => {
+        const player = players[socket.id];
+        if (player) {
+            player.angle = angle;
+            io.emit('state', getGameState()); // Broadcast the updated game state
+        }
+    });
     socket.on('disconnect', () => {
         if (players[socket.id]) {
             scores[players[socket.id].name] = players[socket.id].score;
@@ -111,7 +118,7 @@ io.on('connection', (socket) => {
                 delete playerSockets[name];
             }
         });
-        io.emit('state', { players, projectiles });
+        io.emit('state', getGameState());
     });
 });
 
@@ -167,9 +174,30 @@ function updateProjectiles() {
         }
     }
 
-    io.emit('state', { players, projectiles });
+    io.emit('state', getGameState());
 }
+function getGameState() {
+    const state = {
+        players: {},
+        projectiles: projectiles
+    };
 
+    for (const id in players) {
+        const player = players[id];
+        state.players[id] = {
+            x: player.x,
+            y: player.y,
+            name: player.name,
+            lives: player.lives,
+            dead: player.dead,
+            respawnTime: player.respawnTime,
+            score: player.score,
+            angle: player.angle // Include the angle property
+        };
+    }
+
+    return state;
+}
 // Route pour vérifier la santé de l'application
 app.get('/health', (req, res) => {
     res.status(200).send('OK');

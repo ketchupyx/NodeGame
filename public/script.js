@@ -10,27 +10,31 @@ let players = {};
 let playerId = null;
 let isShooting = false;
 let shootCooldown = 0;
-
+let mouseX = 0;
+let mouseY = 0;
 const keysPressed = {};
 let projectiles = [];
 let particles = [];
 const acceleration = 3;
 const maxSpeed = 50;
-const projectileSpeed = 10; // Vitesse des projectiles
-const cooldownTime = 500; // Temps de recharge de 0.5 seconde
-const maxLives = 5; // Nombre maximum de vies
-
-// Charger l'image de fond
+const projectileSpeed = 10;
+const cooldownTime = 500;
+const maxLives = 5;
+const characterImage = new Image();
+characterImage.src = 'img/character.png';
 const backgroundImage = new Image();
 backgroundImage.src = 'img/map.png';
-
-// Charger l'image de collision
 const collisionImage = new Image();
 collisionImage.src = 'img/collision.png';
 
 let collisionData = null;
 
-// Lorsque l'image de collision est chargée, créer un canvas temporaire pour récupérer les données
+canvas.addEventListener('mousemove', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = event.clientX - rect.left;
+    mouseY = event.clientY - rect.top;
+});
+
 collisionImage.onload = () => {
     const collisionCanvas = document.createElement('canvas');
     collisionCanvas.width = 800;
@@ -40,6 +44,7 @@ collisionImage.onload = () => {
     collisionData = collisionCtx.getImageData(0, 0, 800, 800).data;
     console.log('Collision data loaded');
 };
+
 class Particle {
     constructor(x, y, color) {
         this.x = x;
@@ -50,7 +55,7 @@ class Particle {
             x: Math.random() * 2 - 1,
             y: Math.random() * 2 - 1
         };
-        this.lifespan = 60; // Number of frames the particle will exist
+        this.lifespan = 60;
     }
 
     update() {
@@ -59,13 +64,14 @@ class Particle {
         this.lifespan--;
     }
 
-    draw() {
+    draw(cameraX, cameraY) {
         ctx.fillStyle = this.color;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.arc(this.x - cameraX, this.y - cameraY, this.size, 0, Math.PI * 2);
         ctx.fill();
     }
 }
+
 socket.on('connect', () => {
     console.log('connected to server');
     playerId = socket.id;
@@ -74,121 +80,154 @@ socket.on('connect', () => {
     socket.emit('join', { name: playerName });
 });
 
+socket.on('collision', (collisionData) => {
+    createParticles(collisionData.x, collisionData.y);
+});
+
 socket.on('state', (state) => {
     players = state.players;
     projectiles = state.projectiles;
 });
-socket.on('collision', (collisionData) => {
-    createParticles(collisionData.x, collisionData.y);
-  });
-  function createParticles(x, y) {
-  for (let i = 0; i < 10; i++) {
-    particles.push(new Particle(x, y, 'red'));
-  }
+
+function createParticles(x, y) {
+    for (let i = 0; i < 10; i++) {
+        particles.push(new Particle(x, y, 'red'));
+    }
 }
 
 function updateParticles() {
-  for (let i = particles.length - 1; i >= 0; i--) {
-    particles[i].update();
-    if (particles[i].lifespan <= 0) {
-      particles.splice(i, 1);
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        if (particles[i].lifespan <= 0) {
+            particles.splice(i, 1);
+        }
     }
-  }
 }
 
-function drawParticles() {
-    
-    const player = players[playerId];
-    const cameraX = player ? Math.max(0, Math.min(800 - canvas.width, player.x - canvas.width / 2)) : 0;
-    const cameraY = player ? Math.max(0, Math.min(800 - canvas.height, player.y - canvas.height / 2)) : 0;
-
+function drawParticles(cameraX, cameraY) {
     particles.forEach(particle => {
-        ctx.fillStyle = particle.color;
-        ctx.beginPath();
-        ctx.arc(particle.x - cameraX, particle.y - cameraY, particle.size, 0, Math.PI * 2);
-        ctx.fill();
+        particle.draw(cameraX, cameraY);
     });
 }
-function draw() {
 
+function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    updateParticles();
-    drawParticles();
+
     if (playerId && players[playerId]) {
         const player = players[playerId];
         const cameraX = Math.max(0, Math.min(800 - canvas.width, player.x - canvas.width / 2));
         const cameraY = Math.max(0, Math.min(800 - canvas.height, player.y - canvas.height / 2));
 
-        // Dessiner l'image de fond
+        // Draw the background image
         ctx.drawImage(backgroundImage, -cameraX, -cameraY, 800, 800);
 
-        for (let id in players) {
-            let otherPlayer = players[id];
-            if (!otherPlayer.dead) {
-                ctx.fillStyle = otherPlayer.color;
-                ctx.beginPath();
-                ctx.arc(otherPlayer.x - cameraX, otherPlayer.y - cameraY, 20, 0, Math.PI * 2);
-                ctx.fill();
-                // Dessiner le score
-                ctx.fillStyle = 'black';  // Couleur du texte
-                ctx.font = '12px Arial'; // Taille et police du texte
-                ctx.textAlign = 'center'; // Aligner le texte au centre
-                ctx.fillText(otherPlayer.score, otherPlayer.x - cameraX, otherPlayer.y - cameraY + 4);
+        // Draw other players
+        drawOtherPlayers(cameraX, cameraY);
 
-                // Contour blanc pour le score pour une meilleure visibilité
-                ctx.strokeStyle = 'white';
-                ctx.lineWidth = 1;
-                ctx.strokeText(otherPlayer.score, otherPlayer.x - cameraX, otherPlayer.y - cameraY + 4);
+        // Draw the local player
+        drawLocalPlayer(player, cameraX, cameraY);
 
-                // Dessiner le nom du joueur
-                ctx.fillStyle = 'black';
-                ctx.font = '12px Arial';
-                ctx.fillText(otherPlayer.name, otherPlayer.x - cameraX - 10, otherPlayer.y - cameraY - 25);
+        // Draw projectiles
+        drawProjectiles(cameraX, cameraY);
 
-                // Dessiner les barres de vie et de recharge sous les joueurs
-                const barWidth = 40;
-                const barHeight = 5;
-                const barOffsetY = 30;
+        // Draw particles
+        drawParticles(cameraX, cameraY);
 
-                // Barre de vie
-                ctx.fillStyle = 'red';
-                ctx.fillRect(otherPlayer.x - cameraX - barWidth / 2, otherPlayer.y - cameraY + barOffsetY, barWidth, barHeight);
-                ctx.fillStyle = 'green';
-                ctx.fillRect(otherPlayer.x - cameraX - barWidth / 2, otherPlayer.y - cameraY + barOffsetY, barWidth * (otherPlayer.lives / maxLives), barHeight);
+        // Draw UI elements
+        drawUI(player, cameraX, cameraY);
+    }
 
-                // Barre de recharge
-                ctx.fillStyle = 'green';
-                ctx.fillRect(otherPlayer.x - cameraX - barWidth / 2, otherPlayer.y - cameraY + barOffsetY + barHeight + 2, barWidth, barHeight);
-                if (otherPlayer.shootCooldown > 0) {
-                    ctx.fillStyle = 'blue';
-                    ctx.fillRect(otherPlayer.x - cameraX - barWidth / 2, otherPlayer.y - cameraY + barOffsetY + barHeight + 2, barWidth * (1 - otherPlayer.shootCooldown / cooldownTime), barHeight);
-                }
-            }
-        }
+    updateParticles();
+    requestAnimationFrame(draw);
+}
 
-        // Dessiner les projectiles
-        for (let projectile of projectiles) {
-            ctx.fillStyle = 'black';
-            ctx.beginPath();
-            ctx.arc(projectile.x - cameraX, projectile.y - cameraY, 5, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        if (player.dead) {
-            const respawnTimeLeft = Math.max(0, Math.ceil((player.respawnTime - Date.now()) / 1000));
-            ctx.fillStyle = 'black';
-            ctx.font = '30px Arial';
-            ctx.fillText(`Dead, respawning in ${respawnTimeLeft}...`, canvas.width / 2 - 150, canvas.height / 2);
+function drawOtherPlayers(cameraX, cameraY) {
+    for (let id in players) {
+        if (id !== playerId && !players[id].dead) {
+            drawPlayer(players[id], cameraX, cameraY);
         }
     }
-    updateParticles();
-    drawParticles();
-    requestAnimationFrame(draw);
+}
+
+function drawLocalPlayer(player, cameraX, cameraY) {
+    const characterSize = 100 * 0.5;
+    const angle = Math.atan2(mouseY - (player.y - cameraY), mouseX - (player.x - cameraX));
+
+    ctx.save();
+    ctx.translate(player.x - cameraX, player.y - cameraY);
+    ctx.rotate(angle);
+    ctx.drawImage(characterImage, -characterSize / 2, -characterSize / 2, characterSize, characterSize);
+    ctx.restore();
+    drawPlayerBars(player, cameraX, cameraY);
+}
+
+function drawPlayer(player, cameraX, cameraY) {
+    const characterSize = 100 * 0.5;
+
+    ctx.save();
+    ctx.translate(player.x - cameraX, player.y - cameraY);
+    ctx.rotate(player.angle);
+    ctx.drawImage(characterImage, -characterSize / 2, -characterSize / 2, characterSize, characterSize);
+    ctx.restore();
+
+    drawPlayerBars(player, cameraX, cameraY);
+}
+
+function drawPlayerBars(player, cameraX, cameraY) {
+    const barWidth = 40;
+    const barHeight = 5;
+    const barOffsetY = 30;
+
+    // Health bar
+    ctx.fillStyle = 'red';
+    ctx.fillRect(player.x - cameraX - barWidth / 2, player.y - cameraY + barOffsetY, barWidth, barHeight);
+    ctx.fillStyle = 'green';
+    ctx.fillRect(player.x - cameraX - barWidth / 2, player.y - cameraY + barOffsetY, barWidth * (player.lives / maxLives), barHeight);
+
+    // Reload bar
+    ctx.fillStyle = 'green';
+    ctx.fillRect(player.x - cameraX - barWidth / 2, player.y - cameraY + barOffsetY + barHeight + 2, barWidth, barHeight);
+    if (player.shootCooldown > 0) {
+        ctx.fillStyle = 'blue';
+        ctx.fillRect(player.x - cameraX - barWidth / 2, player.y - cameraY + barOffsetY + barHeight + 2, barWidth * (1 - player.shootCooldown / cooldownTime), barHeight);
+    }
+}
+
+function drawProjectiles(cameraX, cameraY) {
+    for (let projectile of projectiles) {
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(projectile.x - cameraX, projectile.y - cameraY, 5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function drawUI(player, cameraX, cameraY) {
+    if (player.dead && player.respawnTime) {
+        const respawnTimeLeft = Math.max(0, Math.ceil((player.respawnTime - Date.now()) / 1000));
+        ctx.fillStyle = 'black';
+        ctx.font = '30px Arial';
+        ctx.fillText(`Dead, respawning in ${respawnTimeLeft}...`, canvas.width / 2 - 150, canvas.height / 2);
+    }
 }
 
 canvas.addEventListener('mousedown', (event) => {
     if (event.button === 0 && shootCooldown <= 0) {
         fireProjectile(event.clientX, event.clientY);
+    }
+});
+
+canvas.addEventListener('mousemove', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = event.clientX - rect.left;
+    mouseY = event.clientY - rect.top;
+
+    if (playerId && players[playerId]) {
+        const player = players[playerId];
+        const cameraX = Math.max(0, Math.min(800 - canvas.width, player.x - canvas.width / 2));
+        const cameraY = Math.max(0, Math.min(800 - canvas.height, player.y - canvas.height / 2));
+        const angle = Math.atan2(mouseY - (player.y - cameraY), mouseX - (player.x - cameraX));
+        socket.emit('playerAngle', angle);
     }
 });
 
@@ -218,7 +257,7 @@ function fireProjectile(mouseX, mouseY) {
         projectiles.push(projectile);
         socket.emit('fire', projectile);
         shootCooldown = cooldownTime;
-        console.log('Fire! Shoot cooldown set to:', shootCooldown); // Log pour vérifier la valeur de shootCooldown
+        console.log('Fire! Shoot cooldown set to:', shootCooldown);
     }
 }
 
@@ -242,12 +281,11 @@ function updateMovement() {
     if (playerSpeed.x > maxSpeed) playerSpeed.x = maxSpeed;
     if (playerSpeed.x < -maxSpeed) playerSpeed.x = -maxSpeed;
     if (playerSpeed.y > maxSpeed) playerSpeed.y = maxSpeed;
-    if (playerSpeed.y < -maxSpeed) playerSpeed.y = maxSpeed;
+    if (playerSpeed.y < -maxSpeed) playerSpeed.y = -maxSpeed;
 
     movement.x = playerSpeed.x;
     movement.y = playerSpeed.y;
 
-    // Vérifier les collisions avec les obstacles
     if (playerId && players[playerId]) {
         let newX = players[playerId].x + movement.x;
         let newY = players[playerId].y + movement.y;
@@ -256,47 +294,42 @@ function updateMovement() {
         }
     }
 
-    // Mettre à jour les projectiles
     updateProjectiles();
 }
 
 function updateProjectiles() {
-    updateParticles();
     if (shootCooldown > 0) {
-      shootCooldown -= 1000 / 60;
+        shootCooldown -= 1000 / 60;
     }
     for (let i = projectiles.length - 1; i >= 0; i--) {
-      let projectile = projectiles[i];
-      projectile.x += projectile.direction.x * projectileSpeed;
-      projectile.y += projectile.direction.y * projectileSpeed;
-  
-      let collision = false;
-  
-      // Check collision with obstacles
-      if (projectile.x < 0 || projectile.x > 800 || projectile.y < 0 || projectile.y > 800 ||
-          isCollidingWithObstacles(projectile.x, projectile.y, 5)) {
-        collision = true;
-      }
-  
-      // Check collision with players
-      for (let id in players) {
-        if (id !== projectile.ownerId) {
-          let player = players[id];
-          if (!player.dead && Math.hypot(projectile.x - player.x, projectile.y - player.y) < 20) {
+        let projectile = projectiles[i];
+        projectile.x += projectile.direction.x * projectileSpeed;
+        projectile.y += projectile.direction.y * projectileSpeed;
+
+        let collision = false;
+
+        if (projectile.x < 0 || projectile.x > 800 || projectile.y < 0 || projectile.y > 800 ||
+            isCollidingWithObstacles(projectile.x, projectile.y, 5)) {
             collision = true;
-            // Handle player hit logic here (e.g., reduce health)
-            socket.emit('playerHit', { playerId: id, projectileId: i });
-            break;
-          }
         }
-      }
-  
-      if (collision) {
-        createParticles(projectile.x, projectile.y);
-        projectiles.splice(i, 1);
-      }
+
+        for (let id in players) {
+            if (id !== projectile.ownerId) {
+                let player = players[id];
+                if (!player.dead && Math.hypot(projectile.x - player.x, projectile.y - player.y) < 20) {
+                    collision = true;
+                    socket.emit('playerHit', { playerId: id, projectileId: i });
+                    break;
+                }
+            }
+        }
+
+        if (collision) {
+            createParticles(projectile.x, projectile.y);
+            projectiles.splice(i, 1);
+        }
     }
-  }
+}
 
 function isCollidingWithObstacles(x, y, radius) {
     if (!collisionData) return false;
@@ -315,6 +348,6 @@ function isCollidingWithObstacles(x, y, radius) {
     return false;
 }
 
-setInterval(updateMovement, 1000 / 60); // Mettre à jour le mouvement 60 fois par seconde
- 
+setInterval(updateMovement, 1000 / 60);
+
 draw();
