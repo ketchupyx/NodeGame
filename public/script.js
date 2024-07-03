@@ -236,5 +236,5 @@ function isCollidingWithObstacles(x, y, radius) {
 }
 
 setInterval(updateMovement, 1000 / 60); // Mettre à jour le mouvement 60 fois par seconde
-
+ 
 draw();

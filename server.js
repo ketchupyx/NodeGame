@@ -242,7 +242,7 @@ app.post('/admin/kick', (req, res) => {
         res.status(404).send(`Player ${playerName} not found.`);
     }
 });
-
+ 
 server.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
