@@ -63,10 +63,17 @@ io.on('connection', (socket) => {
     socket.on('move', (movement) => {
         const player = players[socket.id];
         if (player && !player.dead) {
-            player.x += movement.x;
-            player.y += movement.y;
-            player.x = Math.max(0, Math.min(800, player.x));
-            player.y = Math.max(0, Math.min(800, player.y));
+            const newX = player.x + movement.x;
+            const newY = player.y + movement.y;
+
+            if (!isCollidingWithObstacles(newX, newY, 20)) {
+                player.x = newX;
+                player.y = newY;
+            } else {
+                const { validX, validY } = findValidPosition(player.x, player.y);
+                player.x = validX;
+                player.y = validY;
+            }
             io.emit('state', { players, projectiles });
         }
     });
@@ -99,7 +106,10 @@ socket.on('fire', (projectile) => {
     });
 });
 
-setInterval(updateProjectiles, 1000 / 60);
+setInterval(() => {
+    updateProjectiles();
+    io.emit('state', { players, projectiles });
+}, 1000 / 60);
 
 function updateProjectiles() {
     for (let id in players) {
@@ -170,6 +180,23 @@ function isCollidingWithObstacles(x, y, radius) {
         }
     }
     return false;
+}
+
+// Fonction pour trouver la position valide la plus proche
+function findValidPosition(x, y) {
+    const maxDistance = 50; // Distance maximale pour chercher une position valide
+    for (let d = 1; d <= maxDistance; d++) {
+        for (let dx = -d; dx <= d; dx++) {
+            for (let dy = -d; dy <= d; dy++) {
+                const newX = x + dx;
+                const newY = y + dy;
+                if (!isCollidingWithObstacles(newX, newY, 20)) {
+                    return { validX: newX, validY: newY };
+                }
+            }
+        }
+    }
+    return { validX: x, validY: y }; // Si aucune position valide n'est trouvée, retourner la position originale
 }
 
 function getRandomColor() {
