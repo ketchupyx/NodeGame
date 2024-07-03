@@ -17,7 +17,7 @@ function isCollidingWithObstacles(x, y, radius, collisionData) {
     }
     return false;
 }
-
+ 
 function getRandomColor() {
     const letters = '0123456789ABCDEF';
     let color = '#';
